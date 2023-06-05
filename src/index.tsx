@@ -6,7 +6,7 @@ const LINKING_ERROR =
   '- You rebuilt the app after installing the package\n' +
   '- You are not using Expo Go\n';
 
-const RnPayments = NativeModules.RnPayments
+const RNPayments = NativeModules.RnPayments
   ? NativeModules.RnPayments
   : new Proxy(
       {},
@@ -18,5 +18,5 @@ const RnPayments = NativeModules.RnPayments
     );
 
 export function multiply(a: number, b: number): Promise<number> {
-  return RnPayments.multiply(a, b);
+  return RNPayments.multiply(a, b);
 }
