@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import { StyleSheet, View, Text } from 'react-native';
-import { multiply } from 'rn-payments';
+import { StyleSheet, View, Text, Button } from 'react-native';
+import { multiply, makePayment } from 'rn-payments';
 
 export default function App() {
   const [result, setResult] = React.useState<number | undefined>();
@@ -13,6 +13,14 @@ export default function App() {
   return (
     <View style={styles.container}>
       <Text>Result: {result}</Text>
+      <Button
+        onPress={async () => {
+          makePayment()
+            .then(() => console.log('success'))
+            .catch((e) => console.log(e));
+        }}
+        title="Make payment"
+      />
     </View>
   );
 }

@@ -20,3 +20,7 @@ const RNPayments = NativeModules.RnPayments
 export function multiply(a: number, b: number): Promise<number> {
   return RNPayments.multiply(a, b);
 }
+
+export function makePayment(): Promise<any> {
+  return RNPayments.makePayment();
+}
