@@ -1,59 +1,169 @@
 package com.rnpayments.gpay;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.util.Log;
 
+import androidx.annotation.NonNull;
+
+import com.facebook.react.bridge.ActivityEventListener;
+import com.facebook.react.bridge.BaseActivityEventListener;
 import com.facebook.react.bridge.Promise;
+import com.facebook.react.bridge.ReadableArray;
+import com.facebook.react.bridge.ReadableMap;
+import com.google.android.gms.common.api.Status;
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
 import com.google.android.gms.wallet.AutoResolveHelper;
+import com.google.android.gms.wallet.IsReadyToPayRequest;
+import com.google.android.gms.wallet.PaymentData;
 import com.google.android.gms.wallet.PaymentDataRequest;
 import com.google.android.gms.wallet.PaymentsClient;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.Optional;
-
 public class GPay {
 
-  // Arbitrarily-picked constant integer you define to track a request for payment data activity.
+  private static final String TAG = "ReactNative";
+
+  private PaymentsClient mPaymentsClient;
+
+  private Promise requestPaymentPromise = null;
+
   private static final int LOAD_PAYMENT_DATA_REQUEST_CODE = 991;
 
-  // A client for interacting with the Google Pay API.
-  private PaymentsClient paymentsClient;
+  private final Activity currentActivity;
 
-  public void requestPayment(Promise promise, Activity activity) {
+  public GPay(Activity currentActivity) {
+    this.currentActivity = currentActivity;
+  }
 
-    // The price provided to the API should include taxes and shipping.
-    // This price is not displayed to the user.
+  public Activity getCurrentActivity() {
+    return currentActivity;
+  }
+
+  private final ActivityEventListener activityEventListener = new BaseActivityEventListener() {
+    @Override
+    public void onActivityResult(Activity activity, int requestCode, int resultCode, Intent data) {
+      switch (requestCode) {
+        // value passed in AutoResolveHelper
+        case LOAD_PAYMENT_DATA_REQUEST_CODE:
+          switch (resultCode) {
+            case Activity.RESULT_OK:
+              PaymentData paymentData = PaymentData.getFromIntent(data);
+              handlePaymentSuccess(paymentData);
+              break;
+            case Activity.RESULT_CANCELED:
+              requestPaymentPromise.reject("PAYMENT_RESULT_CANCELED", "Payment has been canceled");
+              break;
+            case AutoResolveHelper.RESULT_ERROR:
+              Status status = AutoResolveHelper.getStatusFromIntent(data);
+              int statusCode = status.getStatusCode();
+              String errorMessage = String.format("loadPaymentData failed. Error code: %d", statusCode);
+              Log.w(TAG, "[GooglePay] " + errorMessage);
+              requestPaymentPromise.reject("PAYMENT_RESULT_ERROR", errorMessage);
+              break;
+            default:
+              // Do nothing.
+          }
+          break;
+      }
+    }
+  };
+
+  public void setEnvironment(int environment) {
+    final Activity activity = getCurrentActivity();
+    if (activity == null) {
+      return;
+    }
+    mPaymentsClient = PaymentsUtil.createPaymentsClient(environment, activity);
+  }
+
+  public void isReadyToPay(ReadableArray allowedCardNetworks, ReadableArray allowedCardAuthMethods, final Promise promise) {
+    final Activity activity = getCurrentActivity();
+    if (activity == null) {
+      Log.w(TAG, "[GooglePay] activity is null");
+      promise.resolve(false);
+      return;
+    }
+    final JSONObject isReadyToPayJson = PaymentsUtil.getIsReadyToPayRequest(allowedCardNetworks.toArrayList(), allowedCardAuthMethods.toArrayList());
+    if (isReadyToPayJson == null) {
+      Log.w(TAG, "[GooglePay] isReadyToPayJson == null");
+      promise.resolve(false);
+      return;
+    }
+    IsReadyToPayRequest request = IsReadyToPayRequest.fromJson(isReadyToPayJson.toString());
+    if (request == null) {
+      Log.w(TAG, "[GooglePay] IsReadyToPayRequest == null");
+      promise.resolve(false);
+      return;
+    }
+
+    // The call to isReadyToPay is asynchronous and returns a Task. We need to provide an
+    // OnCompleteListener to be triggered when the result of the call is known.
+    Task<Boolean> task = mPaymentsClient.isReadyToPay(request);
+    task.addOnCompleteListener(activity,
+      new OnCompleteListener<Boolean>() {
+        @Override
+        public void onComplete(@NonNull Task<Boolean> task) {
+          if (task.isSuccessful()) {
+            if (task.getResult()) {
+              promise.resolve(true);
+            } else {
+              Log.w(TAG, "[GooglePay] Not available");
+              promise.resolve(false);
+            }
+          } else {
+            Log.w(TAG, "[GooglePay] isReadyToPay failed");
+            promise.resolve(false);
+          }
+        }
+      });
+  }
+
+  public void requestPayment(ReadableMap requestData, final Promise promise) {
+    final Activity activity = getCurrentActivity();
+    if (activity == null) {
+      Log.w(TAG, "[GooglePay] activity is null");
+      promise.reject("NO_ACTIVITY", "activity is null");
+      return;
+    }
+    JSONObject paymentDataRequestJson = PaymentsUtil.getPaymentDataRequest(requestData);
+    if (paymentDataRequestJson == null) {
+      promise.reject("PAYMENT_DATA_REQUEST_JSON", "paymentDataRequestJson is null");
+      return;
+    }
+
+    this.requestPaymentPromise = promise;
+
+    PaymentDataRequest request = PaymentDataRequest.fromJson(paymentDataRequestJson.toString());
+    if (request != null) {
+      AutoResolveHelper.resolveTask(mPaymentsClient.loadPaymentData(request), activity, LOAD_PAYMENT_DATA_REQUEST_CODE);
+    }
+  }
+
+  private void handlePaymentSuccess(PaymentData paymentData) {
+    String paymentInformation = paymentData.toJson();
+
+    // Token will be null if PaymentDataRequest was not constructed using fromJson(String).
+    if (paymentInformation == null) {
+      requestPaymentPromise.reject("NULL_PAYMENT_INFORMATION", "paymentInformation is null");
+      return;
+    }
+    JSONObject paymentMethodData;
+
     try {
-//      final Activity activity = getCurrentActivity();
-      if (activity == null) {
-        Log.w("ReactNative", "[GooglePay] activity is null");
-        promise.reject("NO_ACTIVITY", "activity is null");
-        return;
-      }
-      // replace 10000 with price
-      Optional<JSONObject> paymentDataRequestJson = PaymentsUtil.getPaymentDataRequest(10000);
-      if (!paymentDataRequestJson.isPresent()) {
-        return;
-      }
+      paymentMethodData = new JSONObject(paymentInformation).getJSONObject("paymentMethodData");
+      // If the gateway is set to "example", no payment information is returned - instead, the
+      // token will only consist of "examplePaymentMethodToken".
 
-      Log.d("ReactNative", paymentDataRequestJson.get().toString());
-
-      PaymentDataRequest request =
-        PaymentDataRequest.fromJson(paymentDataRequestJson.get().toString());
-
-      // Since loadPaymentData may show the UI asking the user to select a payment method, we use
-      // AutoResolveHelper to wait for the user interacting with it. Once completed,
-      // onActivityResult will be called with the result.
-      if (request != null) {
-        AutoResolveHelper.resolveTask(
-          paymentsClient.loadPaymentData(request),
-          activity, LOAD_PAYMENT_DATA_REQUEST_CODE);
-      }
-
-    } catch (Exception e) {
-      throw new RuntimeException("The price cannot be deserialized from the JSON object.");
+      // Logging token string.
+      String token = paymentMethodData.getJSONObject("tokenizationData").getString("token");
+      requestPaymentPromise.resolve(token);
+    } catch (JSONException e) {
+      Log.e(TAG, "[GooglePay] handlePaymentSuccess error: " + e.toString());
+      return;
     }
   }
 }
