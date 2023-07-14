@@ -1,24 +1,16 @@
 package com.rnpayments.gpay;
 
 import android.app.Activity;
-import android.content.Intent;
 import android.util.Log;
 
-import androidx.annotation.NonNull;
-
-import com.facebook.react.bridge.ActivityEventListener;
-import com.facebook.react.bridge.BaseActivityEventListener;
 import com.facebook.react.bridge.Promise;
-import com.facebook.react.bridge.ReadableArray;
 import com.facebook.react.bridge.ReadableMap;
-import com.google.android.gms.common.api.Status;
-import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
-import com.google.android.gms.wallet.AutoResolveHelper;
 import com.google.android.gms.wallet.IsReadyToPayRequest;
 import com.google.android.gms.wallet.PaymentData;
 import com.google.android.gms.wallet.PaymentDataRequest;
 import com.google.android.gms.wallet.PaymentsClient;
+import com.rnpayments.gpay.dtos.InitGpayDto;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -27,143 +19,83 @@ public class GPay {
 
   private static final String TAG = "ReactNative";
 
-  private PaymentsClient mPaymentsClient;
-
-  private Promise requestPaymentPromise = null;
-
-  private static final int LOAD_PAYMENT_DATA_REQUEST_CODE = 991;
-
   private final Activity currentActivity;
+  private final PaymentsClient paymentsClient;
+  private boolean canUseGooglePay;
 
-  public GPay(Activity currentActivity) {
+  public GPay(Activity currentActivity, InitGpayDto gpayDto) {
+    /*
+     *
+     * */
     this.currentActivity = currentActivity;
+    PaymentsUtil.setAllowedCardAuthMethods(gpayDto.getAllowedCardAuthMethods());
+    PaymentsUtil.setAllowedCardNetworks(gpayDto.getAllowedCardNetworks());
+    PaymentsUtil.setRequireBillingAddress(gpayDto.isRequireBillingAddress());
+    PaymentsUtil.setGateway(gpayDto.getGateway());
+    PaymentsUtil.setGatewayMerchantId(gpayDto.getGatewayMerchantId());
+    PaymentsUtil.setMerchantName(gpayDto.getMerchantName());
+    this.paymentsClient = PaymentsUtil.createPaymentsClient(currentActivity, gpayDto.getWalletEnvironment());
+
+    this.fetchCanUseGooglePay();
   }
 
   public Activity getCurrentActivity() {
     return currentActivity;
   }
 
-  private final ActivityEventListener activityEventListener = new BaseActivityEventListener() {
-    @Override
-    public void onActivityResult(Activity activity, int requestCode, int resultCode, Intent data) {
-      switch (requestCode) {
-        // value passed in AutoResolveHelper
-        case LOAD_PAYMENT_DATA_REQUEST_CODE:
-          switch (resultCode) {
-            case Activity.RESULT_OK:
-              PaymentData paymentData = PaymentData.getFromIntent(data);
-              handlePaymentSuccess(paymentData);
-              break;
-            case Activity.RESULT_CANCELED:
-              requestPaymentPromise.reject("PAYMENT_RESULT_CANCELED", "Payment has been canceled");
-              break;
-            case AutoResolveHelper.RESULT_ERROR:
-              Status status = AutoResolveHelper.getStatusFromIntent(data);
-              int statusCode = status.getStatusCode();
-              String errorMessage = String.format("loadPaymentData failed. Error code: %d", statusCode);
-              Log.w(TAG, "[GooglePay] " + errorMessage);
-              requestPaymentPromise.reject("PAYMENT_RESULT_ERROR", errorMessage);
-              break;
-            default:
-              // Do nothing.
-          }
-          break;
-      }
-    }
-  };
-
-  public void setEnvironment(int environment) {
-    final Activity activity = getCurrentActivity();
-    if (activity == null) {
-      return;
-    }
-    mPaymentsClient = PaymentsUtil.createPaymentsClient(environment, activity);
+  public boolean isGPayAvailable() {
+    return this.canUseGooglePay;
   }
 
-  public void isReadyToPay(ReadableArray allowedCardNetworks, ReadableArray allowedCardAuthMethods, final Promise promise) {
-    final Activity activity = getCurrentActivity();
-    if (activity == null) {
-      Log.w(TAG, "[GooglePay] activity is null");
-      promise.resolve(false);
-      return;
-    }
-    final JSONObject isReadyToPayJson = PaymentsUtil.getIsReadyToPayRequest(allowedCardNetworks.toArrayList(), allowedCardAuthMethods.toArrayList());
+  public void requestPayment(ReadableMap paymentRequest, final Promise promise) throws JSONException {
+    final Task<PaymentData> task = this.getLoadPaymentDataTask(paymentRequest);
+
+    assert task != null;
+    task.addOnCompleteListener(completedTask -> {
+      if (completedTask.isSuccessful()) {
+        promise.resolve(completedTask.getResult());
+      } else {
+        promise.reject(TAG, "Failed to complete payment");
+      }
+    });
+  }
+
+  private void fetchCanUseGooglePay() {
+    final JSONObject isReadyToPayJson = PaymentsUtil.getIsReadyToPayRequest();
     if (isReadyToPayJson == null) {
-      Log.w(TAG, "[GooglePay] isReadyToPayJson == null");
-      promise.resolve(false);
-      return;
-    }
-    IsReadyToPayRequest request = IsReadyToPayRequest.fromJson(isReadyToPayJson.toString());
-    if (request == null) {
-      Log.w(TAG, "[GooglePay] IsReadyToPayRequest == null");
-      promise.resolve(false);
+      this.canUseGooglePay = false;
       return;
     }
 
-    // The call to isReadyToPay is asynchronous and returns a Task. We need to provide an
-    // OnCompleteListener to be triggered when the result of the call is known.
-    Task<Boolean> task = mPaymentsClient.isReadyToPay(request);
-    task.addOnCompleteListener(activity,
-      new OnCompleteListener<Boolean>() {
-        @Override
-        public void onComplete(@NonNull Task<Boolean> task) {
-          if (task.isSuccessful()) {
-            if (task.getResult()) {
-              promise.resolve(true);
-            } else {
-              Log.w(TAG, "[GooglePay] Not available");
-              promise.resolve(false);
-            }
-          } else {
-            Log.w(TAG, "[GooglePay] isReadyToPay failed");
-            promise.resolve(false);
-          }
+    IsReadyToPayRequest request = IsReadyToPayRequest.fromJson(isReadyToPayJson.toString());
+    Task<Boolean> task = paymentsClient.isReadyToPay(request);
+    task.addOnCompleteListener(
+      completedTask -> {
+        if (completedTask.isSuccessful()) {
+          this.canUseGooglePay = completedTask.getResult();
+        } else {
+          Log.w("isReadyToPay failed", completedTask.getException());
+          this.canUseGooglePay = false;
         }
       });
   }
 
-  public void requestPayment(ReadableMap requestData, final Promise promise) {
-    final Activity activity = getCurrentActivity();
-    if (activity == null) {
-      Log.w(TAG, "[GooglePay] activity is null");
-      promise.reject("NO_ACTIVITY", "activity is null");
-      return;
-    }
-    JSONObject paymentDataRequestJson = PaymentsUtil.getPaymentDataRequest(requestData);
+  private Task<PaymentData> getLoadPaymentDataTask(ReadableMap map) throws JSONException {
+    JSONObject transactionInfo = new JSONObject();
+    transactionInfo.put("totalPrice", map.getString("totalPrice"));
+    transactionInfo.put("totalPriceStatus", map.getString("totalPriceStatus"));
+    transactionInfo.put("countryCode", map.getString("countryCode"));
+    transactionInfo.put("currencyCode", map.getString("currencyCode"));
+    transactionInfo.put("checkoutOption", "COMPLETE_IMMEDIATE_PURCHASE");
+
+    JSONObject paymentDataRequestJson = PaymentsUtil.getPaymentDataRequest(transactionInfo, null);
     if (paymentDataRequestJson == null) {
-      promise.reject("PAYMENT_DATA_REQUEST_JSON", "paymentDataRequestJson is null");
-      return;
+      return null;
     }
 
-    this.requestPaymentPromise = promise;
-
-    PaymentDataRequest request = PaymentDataRequest.fromJson(paymentDataRequestJson.toString());
-    if (request != null) {
-      AutoResolveHelper.resolveTask(mPaymentsClient.loadPaymentData(request), activity, LOAD_PAYMENT_DATA_REQUEST_CODE);
-    }
+    PaymentDataRequest request =
+      PaymentDataRequest.fromJson(paymentDataRequestJson.toString());
+    return paymentsClient.loadPaymentData(request);
   }
 
-  private void handlePaymentSuccess(PaymentData paymentData) {
-    String paymentInformation = paymentData.toJson();
-
-    // Token will be null if PaymentDataRequest was not constructed using fromJson(String).
-    if (paymentInformation == null) {
-      requestPaymentPromise.reject("NULL_PAYMENT_INFORMATION", "paymentInformation is null");
-      return;
-    }
-    JSONObject paymentMethodData;
-
-    try {
-      paymentMethodData = new JSONObject(paymentInformation).getJSONObject("paymentMethodData");
-      // If the gateway is set to "example", no payment information is returned - instead, the
-      // token will only consist of "examplePaymentMethodToken".
-
-      // Logging token string.
-      String token = paymentMethodData.getJSONObject("tokenizationData").getString("token");
-      requestPaymentPromise.resolve(token);
-    } catch (JSONException e) {
-      Log.e(TAG, "[GooglePay] handlePaymentSuccess error: " + e.toString());
-      return;
-    }
-  }
 }

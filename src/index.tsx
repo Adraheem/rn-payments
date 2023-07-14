@@ -11,6 +11,28 @@ export type AllowedCardAuthMethodsType = 'PAN_ONLY' | 'CRYPTOGRAM_3DS';
 
 export type tokenizationSpecificationType = 'PAYMENT_GATEWAY' | 'DIRECT';
 
+export enum Environment {
+  "PRODUCTION" = 1,
+  "TEST" = 3
+}
+
+export interface InitRNPayments {
+  allowedCardAuthMethods: AllowedCardAuthMethodsType[],
+  allowedCardNetworks: AllowedCardNetworkType[],
+  requireBillingAddress: boolean,
+  environment: Environment,
+  gateway: string,
+  gatewayMerchantId: string,
+  merchantName: string,
+}
+
+export interface PaymentRequest {
+  totalPrice: string,
+  totalPriceStatus: "FINAL",
+  countryCode: string,
+  currencyCode: string,
+}
+
 export interface RequestDataType {
   cardPaymentMethod: {
     tokenizationSpecification: {
@@ -46,25 +68,14 @@ const RNPayments = NativeModules.RnPayments
       }
     );
 
-export function multiply(a: number, b: number): Promise<number> {
-  return RNPayments.multiply(a, b);
+export function init(data: InitRNPayments){
+  RNPayments.init(data);
 }
 
-export function makePayment(): Promise<any> {
-  return RNPayments.makePayment();
+export function isAvailable(): boolean {
+  return RNPayments.isGPayAvailable();
 }
 
-export function setEnvironment(environment: number) {
-  RNPayments.setEnvironment(environment);
-}
-
-export function isReadyToPay(
-  allowedCardNetworks: AllowedCardNetworkType[],
-  allowedCardAuthMethods: AllowedCardAuthMethodsType[]
-): Promise<boolean> {
-  return RNPayments.isReadyToPay(allowedCardNetworks, allowedCardAuthMethods);
-}
-
-export function requestPayment(requestData: RequestDataType): Promise<string> {
-  return RNPayments.requestPayment(requestData);
+export function pay(paymentRequest: PaymentRequest): Promise<any>{
+  return RNPayments.pay(paymentRequest);
 }

@@ -2,14 +2,13 @@ import * as React from 'react';
 
 import { StyleSheet, View, Text, Button, Platform, Alert } from 'react-native';
 import {
-  multiply,
-  // makePayment,
-  AllowedCardNetworkType,
   AllowedCardAuthMethodsType,
-  RequestDataType,
-  setEnvironment,
-  isReadyToPay,
-  requestPayment,
+  AllowedCardNetworkType,
+  Environment,
+  PaymentRequest,
+  init,
+  isAvailable,
+  pay,
 } from 'rn-payments';
 
 const allowedCardNetworks: AllowedCardNetworkType[] = ['VISA', 'MASTERCARD'];
@@ -18,59 +17,82 @@ const allowedCardAuthMethods: AllowedCardAuthMethodsType[] = [
   'CRYPTOGRAM_3DS',
 ];
 
-const gatewayRequestData: RequestDataType = {
-  cardPaymentMethod: {
-    tokenizationSpecification: {
-      type: 'PAYMENT_GATEWAY',
-      gateway: 'example',
-      gatewayMerchantId: 'exampleGatewayMerchantId',
-    },
-    allowedCardNetworks,
-    allowedCardAuthMethods,
-  },
-  transaction: {
-    totalPrice: '123',
-    totalPriceStatus: 'FINAL',
-    currencyCode: 'RUB',
-  },
-  merchantName: 'Example Merchant',
+const paymentRequest: PaymentRequest = {
+  totalPrice: '10000',
+  totalPriceStatus: 'FINAL',
+  countryCode: 'US',
+  currencyCode: 'USD',
 };
 
+// const gatewayRequestData: RequestDataType = {
+//   cardPaymentMethod: {
+//     tokenizationSpecification: {
+//       type: 'PAYMENT_GATEWAY',
+//       gateway: 'example',
+//       gatewayMerchantId: 'exampleGatewayMerchantId',
+//     },
+//     allowedCardNetworks,
+//     allowedCardAuthMethods,
+//   },
+//   transaction: {
+//     totalPrice: '123',
+//     totalPriceStatus: 'FINAL',
+//     currencyCode: 'NGN',
+//     countryCode: "NG"
+//   },
+//   shippingAddressParameters: {
+//     phoneNumberRequired: true,
+//     allowedCountryCodes: ["NG"]
+//   },
+//   merchantName: 'Example Merchant',
+// };
+
 export default function App() {
-  const [result, setResult] = React.useState<number | undefined>();
+  const [result, setResult] = React.useState(false);
 
   React.useEffect(() => {
-    multiply(10, 7).then(setResult);
     if (Platform.OS === 'android') {
-      setEnvironment(0); // Test
+      init({
+        allowedCardAuthMethods,
+        allowedCardNetworks,
+        environment: Environment.TEST,
+        gateway: '',
+        gatewayMerchantId: '',
+        merchantName: '',
+        requireBillingAddress: false,
+      });
+
+      setTimeout(() => {
+        setResult(isAvailable());
+      }, 10000);
     }
   }, []);
 
-  const payWithGooglePay = (requestData: RequestDataType) => {
-    // Check if Google Pay is available
-    isReadyToPay(allowedCardNetworks, allowedCardAuthMethods).then((ready) => {
-      if (ready) {
-        // Request payment token
-        requestPayment(requestData).then(handleSuccess).catch(handleError);
-      } else {
-        Alert.alert('GPay not ready!');
-      }
-    });
+  const payWithGooglePay = (requestData: PaymentRequest) => {
+    pay(requestData)
+      .then((res) => {
+        handleSuccess(res);
+      })
+      .catch((err) => {
+        handleError(err);
+      });
   };
 
   const handleSuccess = (token: string) => {
     // Send a token to your payment gateway
-    Alert.alert('Success', `token: ${token}`);
+    Alert.alert('Success', `token: {token}`);
   };
 
-  const handleError = (error: any) =>
-    Alert.alert('Error', `${error.code}\n${error.message}`);
+  const handleError = (error: any) => {
+    Alert.alert('Error', 'error');
+    console.log(error);
+  };
 
   return (
     <View style={styles.container}>
-      <Text>Result: {result}</Text>
+      <Text>Result: {result ? 'Available' : 'NOT AVAILABLE'}</Text>
       <Button
-        onPress={() => payWithGooglePay(gatewayRequestData)}
+        onPress={() => payWithGooglePay(paymentRequest)}
         title="Make payment"
       />
     </View>

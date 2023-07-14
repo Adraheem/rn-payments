@@ -1,8 +1,7 @@
 package com.rnpayments.gpay;
 
-import android.app.Activity;
+import android.content.Context;
 
-import com.facebook.react.bridge.ReadableMap;
 import com.google.android.gms.wallet.PaymentsClient;
 import com.google.android.gms.wallet.Wallet;
 
@@ -10,103 +9,147 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 
 public class PaymentsUtil {
-  private PaymentsUtil() {
+
+  private static JSONArray allowedCardNetworks;
+  private static JSONArray allowedCardAuthMethods;
+  private static boolean requireBillingAddress;
+  private static String gateway;
+  private static String gatewayMerchantId;
+  private static String merchantName;
+
+  public static void setGateway(String gateway) {
+    PaymentsUtil.gateway = gateway;
   }
 
-  private static JSONObject getBaseRequest() throws JSONException {
-    return new JSONObject().put("apiVersion", 2).put("apiVersionMinor", 0);
+  public static void setGatewayMerchantId(String gatewayMerchantId) {
+    PaymentsUtil.gatewayMerchantId = gatewayMerchantId;
   }
 
-  private static JSONObject getBaseCardPaymentMethod(ArrayList allowedCardNetworks, ArrayList allowedCardAuthMethods) throws JSONException {
+  public static void setMerchantName(String merchantName) {
+    PaymentsUtil.merchantName = merchantName;
+  }
+
+  public static void setAllowedCardNetworks(ArrayList<Object> allowedCardNetworks) {
+    PaymentsUtil.allowedCardNetworks = new JSONArray(allowedCardNetworks);
+  }
+
+  public static void setAllowedCardAuthMethods(ArrayList<Object> allowedCardAuthMethods) {
+    PaymentsUtil.allowedCardAuthMethods = new JSONArray(allowedCardAuthMethods);
+  }
+
+  public static void setRequireBillingAddress(boolean requireBillingAddress) {
+    PaymentsUtil.requireBillingAddress = requireBillingAddress;
+  }
+
+  private static JSONObject getGatewayTokenizationSpecification() throws JSONException {
+    return new JSONObject() {{
+      put("type", "PAYMENT_GATEWAY");
+      put("parameters", new JSONObject() {{
+        put("gateway", PaymentsUtil.gateway);
+        put("gatewayMerchantId", PaymentsUtil.gatewayMerchantId);
+      }});
+    }};
+  }
+
+  private static JSONObject getMerchantInfo() throws JSONException {
+    return new JSONObject().put("merchantName", PaymentsUtil.merchantName);
+  }
+
+  private static JSONObject getCardPaymentMethod() throws JSONException {
+    JSONObject cardPaymentMethod = getBaseCardPaymentMethod();
+    cardPaymentMethod.put("tokenizationSpecification", getGatewayTokenizationSpecification());
+
+    return cardPaymentMethod;
+  }
+
+  private static JSONObject getBaseCardPaymentMethod() throws JSONException {
     JSONObject cardPaymentMethod = new JSONObject();
     cardPaymentMethod.put("type", "CARD");
 
     JSONObject parameters = new JSONObject();
-    parameters.put("allowedAuthMethods", new JSONArray(allowedCardAuthMethods));
-    parameters.put("allowedCardNetworks", new JSONArray(allowedCardNetworks));
+    parameters.put("allowedAuthMethods", allowedCardAuthMethods);
+    parameters.put("allowedCardNetworks", allowedCardNetworks);
+    // Optionally, you can add billing address/phone number associated with a CARD payment method.
+    parameters.put("billingAddressRequired", requireBillingAddress);
+
+    if (requireBillingAddress) {
+      JSONObject billingAddressParameters = new JSONObject();
+      billingAddressParameters.put("format", "FULL");
+
+      parameters.put("billingAddressParameters", billingAddressParameters);
+    }
 
     cardPaymentMethod.put("parameters", parameters);
 
     return cardPaymentMethod;
   }
 
-  public static PaymentsClient createPaymentsClient(int environment, Activity activity) {
-    Wallet.WalletOptions walletOptions = new Wallet.WalletOptions.Builder().setEnvironment(environment).build();
-    return Wallet.getPaymentsClient(activity, walletOptions);
+  public static PaymentsClient createPaymentsClient(Context context, int environment) {
+    Wallet.WalletOptions walletOptions =
+      new Wallet.WalletOptions.Builder().setEnvironment(environment).build();
+    return Wallet.getPaymentsClient(context, walletOptions);
   }
 
-  public static JSONObject getIsReadyToPayRequest(ArrayList allowedCardNetworks, ArrayList allowedCardAuthMethods) {
+  private static JSONObject getBaseRequest() throws JSONException {
+    return new JSONObject().put("apiVersion", 2).put("apiVersionMinor", 0);
+  }
+
+  public static JSONObject getIsReadyToPayRequest() {
     try {
       JSONObject isReadyToPayRequest = getBaseRequest();
-      JSONArray allowedPaymentMethods = new JSONArray().put(getBaseCardPaymentMethod(allowedCardNetworks, allowedCardAuthMethods));
-      isReadyToPayRequest.put("allowedPaymentMethods", allowedPaymentMethods);
+      isReadyToPayRequest.put(
+        "allowedPaymentMethods", new JSONArray().put(getBaseCardPaymentMethod()));
+
       return isReadyToPayRequest;
+
     } catch (JSONException e) {
       return null;
     }
   }
 
-  private static JSONObject getTransactionInfo(ReadableMap transaction) throws JSONException {
+  private static JSONObject getTransactionInfo(String price, String countryCode, String currencyCode) throws JSONException {
     JSONObject transactionInfo = new JSONObject();
-    transactionInfo.put("totalPrice", transaction.getString("totalPrice"));
-    transactionInfo.put("totalPriceStatus", transaction.getString("totalPriceStatus"));
-    transactionInfo.put("currencyCode", transaction.getString("currencyCode"));
+    transactionInfo.put("totalPrice", price);
+    transactionInfo.put("totalPriceStatus", "FINAL");
+    transactionInfo.put("countryCode", countryCode);
+    transactionInfo.put("currencyCode", currencyCode);
+    transactionInfo.put("checkoutOption", "COMPLETE_IMMEDIATE_PURCHASE");
 
     return transactionInfo;
   }
 
-  private static JSONObject getMerchantInfo(String merchantName) throws JSONException {
-    return new JSONObject().put("merchantName", merchantName);
-  }
+  public static JSONObject getPaymentDataRequest(JSONObject transactionInfo, JSONObject shippingInfo) {
 
-  private static JSONObject getTokenizationSpecification(final ReadableMap tokenizationSpecification) throws JSONException {
-    return new JSONObject() {{
-      put("type", tokenizationSpecification.getString("type"));
-      put("parameters", new JSONObject() {
-        {
-          if (tokenizationSpecification.hasKey("gateway")) {
-            put("gateway", tokenizationSpecification.getString("gateway"));
-          }
-          if (tokenizationSpecification.hasKey("gatewayMerchantId")) {
-            put("gatewayMerchantId", tokenizationSpecification.getString("gatewayMerchantId"));
-          }
-          if (tokenizationSpecification.hasKey("publicKey")) {
-            put("protocolVersion", "ECv2");
-            put("publicKey", tokenizationSpecification.getString("publicKey"));
-          }
-          if (tokenizationSpecification.hasKey("stripe")) {
-            final ReadableMap stripe = tokenizationSpecification.getMap("stripe");
-            put("stripe:publishableKey", stripe.getString("publishableKey"));
-            put("stripe:version", stripe.getString("version"));
-          }
-        }
-      });
-    }};
-  }
-
-  private static JSONObject getCardPaymentMethod(ReadableMap cardPaymentMethodData) throws JSONException {
-    ArrayList allowedCardNetworks = cardPaymentMethodData.getArray("allowedCardNetworks").toArrayList();
-    ArrayList allowedCardAuthMethods = cardPaymentMethodData.getArray("allowedCardAuthMethods").toArrayList();
-    JSONObject cardPaymentMethod = getBaseCardPaymentMethod(allowedCardNetworks, allowedCardAuthMethods);
-    cardPaymentMethod.put("tokenizationSpecification", getTokenizationSpecification(cardPaymentMethodData.getMap("tokenizationSpecification")));
-
-    return cardPaymentMethod;
-  }
-
-  public static JSONObject getPaymentDataRequest(ReadableMap requestData) {
     try {
       JSONObject paymentDataRequest = PaymentsUtil.getBaseRequest();
       paymentDataRequest.put(
-        "allowedPaymentMethods", new JSONArray().put(PaymentsUtil.getCardPaymentMethod(requestData.getMap("cardPaymentMethod"))));
-      paymentDataRequest.put("transactionInfo", PaymentsUtil.getTransactionInfo(requestData.getMap("transaction")));
-      paymentDataRequest.put("merchantInfo", PaymentsUtil.getMerchantInfo(requestData.getString("merchantName")));
+        "allowedPaymentMethods", new JSONArray().put(PaymentsUtil.getCardPaymentMethod()));
+      paymentDataRequest.put("transactionInfo", transactionInfo);
+      paymentDataRequest.put("merchantInfo", PaymentsUtil.getMerchantInfo());
 
+      /* An optional shipping address requirement is a top-level property of the PaymentDataRequest
+      JSON object. */
+      if (shippingInfo != null) {
+        paymentDataRequest.put("shippingAddressRequired", true);
+        paymentDataRequest.put("shippingAddressParameters", shippingInfo);
+      }
       return paymentDataRequest;
+
     } catch (JSONException e) {
       return null;
     }
   }
+
+  public static String amountToString(long amount) {
+    return new BigDecimal(amount)
+      .divide(new BigDecimal(100), RoundingMode.HALF_EVEN)
+      .setScale(2, RoundingMode.HALF_EVEN)
+      .toString();
+  }
+
 }
