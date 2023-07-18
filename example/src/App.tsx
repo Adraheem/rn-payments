@@ -56,9 +56,9 @@ export default function App() {
         allowedCardAuthMethods,
         allowedCardNetworks,
         environment: Environment.TEST,
-        gateway: '',
-        gatewayMerchantId: '',
-        merchantName: '',
+        gateway: 'example',
+        gatewayMerchantId: 'exampleGatewayMerchantId',
+        merchantName: 'Example Merchant',
         requireBillingAddress: false,
       });
 
@@ -80,6 +80,7 @@ export default function App() {
 
   const handleSuccess = (token: string) => {
     // Send a token to your payment gateway
+    console.log(token);
     Alert.alert('Success', `token: {token}`);
   };
 
