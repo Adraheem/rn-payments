@@ -18,10 +18,10 @@ const allowedCardAuthMethods: AllowedCardAuthMethodsType[] = [
 ];
 
 const paymentRequest: PaymentRequest = {
-  totalPrice: '10000',
+  totalPrice: '100.00',
   totalPriceStatus: 'FINAL',
-  countryCode: 'US',
-  currencyCode: 'USD',
+  countryCode: 'NG',
+  currencyCode: 'NGN',
 };
 
 // const gatewayRequestData: RequestDataType = {

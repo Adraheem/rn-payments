@@ -17,7 +17,7 @@ import org.json.JSONObject;
 
 public class GPay {
 
-  private static final String TAG = "ReactNative";
+  private static final String TAG = "RnPayments";
 
   private final Context currentActivity;
   private final PaymentsClient paymentsClient;
