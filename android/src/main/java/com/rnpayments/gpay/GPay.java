@@ -1,6 +1,6 @@
 package com.rnpayments.gpay;
 
-import android.app.Activity;
+import android.content.Context;
 import android.util.Log;
 
 import com.facebook.react.bridge.Promise;
@@ -19,27 +19,27 @@ public class GPay {
 
   private static final String TAG = "ReactNative";
 
-  private final Activity currentActivity;
+  private final Context currentActivity;
   private final PaymentsClient paymentsClient;
   private boolean canUseGooglePay;
 
-  public GPay(Activity currentActivity, InitGpayDto gpayDto) {
+  public GPay(Context context, InitGpayDto gpayDto) {
     /*
      *
      * */
-    this.currentActivity = currentActivity;
+    this.currentActivity = context;
     PaymentsUtil.setAllowedCardAuthMethods(gpayDto.getAllowedCardAuthMethods());
     PaymentsUtil.setAllowedCardNetworks(gpayDto.getAllowedCardNetworks());
     PaymentsUtil.setRequireBillingAddress(gpayDto.isRequireBillingAddress());
     PaymentsUtil.setGateway(gpayDto.getGateway());
     PaymentsUtil.setGatewayMerchantId(gpayDto.getGatewayMerchantId());
     PaymentsUtil.setMerchantName(gpayDto.getMerchantName());
-    this.paymentsClient = PaymentsUtil.createPaymentsClient(currentActivity, gpayDto.getWalletEnvironment());
+    this.paymentsClient = PaymentsUtil.createPaymentsClient(context, gpayDto.getWalletEnvironment());
 
     this.fetchCanUseGooglePay();
   }
 
-  public Activity getCurrentActivity() {
+  public Context getCurrentActivity() {
     return currentActivity;
   }
 
@@ -48,10 +48,12 @@ public class GPay {
   }
 
   public void requestPayment(ReadableMap paymentRequest, final Promise promise) throws JSONException {
+    Log.d(TAG, "Attempting to request payment");
     final Task<PaymentData> task = this.getLoadPaymentDataTask(paymentRequest);
 
     assert task != null;
     task.addOnCompleteListener(completedTask -> {
+      Log.d(TAG, "completedTask string: " + completedTask);
       if (completedTask.isSuccessful()) {
         promise.resolve(completedTask.getResult());
       } else {
@@ -88,13 +90,19 @@ public class GPay {
     transactionInfo.put("currencyCode", map.getString("currencyCode"));
     transactionInfo.put("checkoutOption", "COMPLETE_IMMEDIATE_PURCHASE");
 
+    Log.d(TAG, "TransactionInfo:" + transactionInfo);
     JSONObject paymentDataRequestJson = PaymentsUtil.getPaymentDataRequest(transactionInfo, null);
+    Log.d(TAG, "paymentDataRequestJson: " + paymentDataRequestJson);
     if (paymentDataRequestJson == null) {
+      Log.d(TAG, "paymentDataRequestJson is null");
       return null;
     }
+    Log.d(TAG, "paymentDataRequestJson is NOT null");
 
     PaymentDataRequest request =
       PaymentDataRequest.fromJson(paymentDataRequestJson.toString());
+
+    Log.d(TAG, "PaymentDataRequest: " + request.toJson());
     return paymentsClient.loadPaymentData(request);
   }
 

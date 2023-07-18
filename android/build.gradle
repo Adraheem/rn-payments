@@ -68,6 +68,7 @@ dependencies {
   implementation "com.facebook.react:react-android:+"
   implementation "com.google.android.gms:play-services-pay:16.1.0"
   implementation "com.google.android.gms:play-services-wallet:19.2.0"
+  implementation "com.interswitchng:isw-mobile-payment-sdk:1.1.0"
 }
 
 if (isNewArchitectureEnabled()) {

@@ -55,7 +55,7 @@ public class RnPaymentsModule extends ReactContextBaseJavaModule {
     gpayDto.setGatewayMerchantId(initData.getString("gatewayMerchantId"));
     gpayDto.setMerchantName(initData.getString("merchantName"));
 
-    this.gpay = new GPay(this.getCurrentActivity(), gpayDto);
+    this.gpay = new GPay(this.getReactApplicationContext(), gpayDto);
   }
 
   @ReactMethod
