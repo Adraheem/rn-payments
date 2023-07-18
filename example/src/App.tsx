@@ -1,3 +1,4 @@
+import env from 'example/environment';
 import * as React from 'react';
 
 import { StyleSheet, View, Text, Button, Platform, Alert } from 'react-native';
@@ -6,7 +7,10 @@ import {
   AllowedCardNetworkType,
   Environment,
   PaymentRequest,
+  WebpayEnvironment,
+  configureWebpay,
   init,
+  initiateWebpayPayment,
   isAvailable,
   pay,
 } from 'rn-payments';
@@ -51,6 +55,13 @@ export default function App() {
   const [result, setResult] = React.useState(false);
 
   React.useEffect(() => {
+    configureWebpay({
+      clientId: env.clientId,
+      merchantCode: env.merchantCode,
+      clientSecret: env.clientSecret,
+      currencyCode: '556',
+      environment: WebpayEnvironment.SANDBOX,
+    });
     if (Platform.OS === 'android') {
       init({
         allowedCardAuthMethods,
@@ -80,12 +91,17 @@ export default function App() {
 
   const handleSuccess = (token: string) => {
     // Send a token to your payment gateway
+    console.log(token);
     Alert.alert('Success', `token: {token}`);
   };
 
   const handleError = (error: any) => {
     Alert.alert('Error', 'error');
     console.log(error);
+  };
+
+  const payWithWebpay = () => {
+    initiateWebpayPayment();
   };
 
   return (
@@ -95,6 +111,7 @@ export default function App() {
         onPress={() => payWithGooglePay(paymentRequest)}
         title="Make payment"
       />
+      <Button onPress={payWithWebpay} title="Make payment using webpay" />
     </View>
   );
 }

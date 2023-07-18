@@ -9,8 +9,12 @@ import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.module.annotations.ReactModule;
 import com.google.android.gms.wallet.WalletConstants;
+import com.interswitchng.iswmobilesdk.IswMobileSdk;
+import com.interswitchng.iswmobilesdk.shared.models.core.Environment;
+import com.interswitchng.iswmobilesdk.shared.models.core.IswSdkConfig;
 import com.rnpayments.gpay.GPay;
 import com.rnpayments.gpay.dtos.InitGpayDto;
+import com.rnpayments.webpay.InterSwitchWebpay;
 
 import org.json.JSONException;
 
@@ -25,6 +29,7 @@ public class RnPaymentsModule extends ReactContextBaseJavaModule {
   private static final String ENVIRONMENT_TEST_KEY = "ENVIRONMENT_TEST";
 
   private GPay gpay;
+  private InterSwitchWebpay webpay;
 
   public RnPaymentsModule(ReactApplicationContext reactContext) {
     super(reactContext);
@@ -68,4 +73,19 @@ public class RnPaymentsModule extends ReactContextBaseJavaModule {
     gpay.requestPayment(paymentRequest, promise);
   }
 
+  //  INTERSWITCH WEBPAY
+  @ReactMethod
+  public void configureWebpay(ReadableMap configMap) {
+    webpay = new InterSwitchWebpay();
+    webpay.configureSDK(configMap, Objects.requireNonNull(this.getCurrentActivity()).getApplication());
+  }
+
+  @ReactMethod
+  public void initiateWebpayPayment(final Promise promise) {
+    if (webpay == null) {
+      throw new RuntimeException("Webpay not initialized");
+    }
+
+    webpay.initiatePayment(promise);
+  }
 }

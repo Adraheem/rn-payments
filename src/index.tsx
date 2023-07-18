@@ -12,25 +12,25 @@ export type AllowedCardAuthMethodsType = 'PAN_ONLY' | 'CRYPTOGRAM_3DS';
 export type tokenizationSpecificationType = 'PAYMENT_GATEWAY' | 'DIRECT';
 
 export enum Environment {
-  "PRODUCTION" = 1,
-  "TEST" = 3
+  'PRODUCTION' = 1,
+  'TEST' = 3,
 }
 
 export interface InitRNPayments {
-  allowedCardAuthMethods: AllowedCardAuthMethodsType[],
-  allowedCardNetworks: AllowedCardNetworkType[],
-  requireBillingAddress: boolean,
-  environment: Environment,
-  gateway: string,
-  gatewayMerchantId: string,
-  merchantName: string,
+  allowedCardAuthMethods: AllowedCardAuthMethodsType[];
+  allowedCardNetworks: AllowedCardNetworkType[];
+  requireBillingAddress: boolean;
+  environment: Environment;
+  gateway: string;
+  gatewayMerchantId: string;
+  merchantName: string;
 }
 
 export interface PaymentRequest {
-  totalPrice: string,
-  totalPriceStatus: "FINAL",
-  countryCode: string,
-  currencyCode: string,
+  totalPrice: string;
+  totalPriceStatus: 'FINAL';
+  countryCode: string;
+  currencyCode: string;
 }
 
 export interface RequestDataType {
@@ -51,6 +51,20 @@ export interface RequestDataType {
   merchantName: string;
 }
 
+export enum WebpayEnvironment {
+  TEST = 0,
+  SANDBOX = 1,
+  PRODUCTION = 2,
+}
+
+export interface WebpayConfigType {
+  clientId: string;
+  merchantCode: string;
+  clientSecret: string;
+  currencyCode: string;
+  environment: WebpayEnvironment;
+}
+
 const LINKING_ERROR =
   `The package 'rn-payments' doesn't seem to be linked. Make sure: \n\n` +
   Platform.select({ ios: "- You have run 'pod install'\n", default: '' }) +
@@ -68,7 +82,7 @@ const RNPayments = NativeModules.RnPayments
       }
     );
 
-export function init(data: InitRNPayments){
+export function init(data: InitRNPayments) {
   RNPayments.init(data);
 }
 
@@ -76,6 +90,14 @@ export function isAvailable(): boolean {
   return RNPayments.isGPayAvailable();
 }
 
-export function pay(paymentRequest: PaymentRequest): Promise<any>{
+export function pay(paymentRequest: PaymentRequest): Promise<any> {
   return RNPayments.pay(paymentRequest);
+}
+
+export function configureWebpay(config: WebpayConfigType): Promise<any> {
+  return RNPayments.configureWebpay(config);
+}
+
+export function initiateWebpayPayment(): Promise<any> {
+  return RNPayments.initiateWebpayPayment();
 }
