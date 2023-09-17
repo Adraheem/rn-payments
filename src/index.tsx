@@ -65,6 +65,15 @@ export interface WebpayConfigType {
   environment: WebpayEnvironment;
 }
 
+export interface WebpayPaymentInfo {
+  amount: number;
+  customerId: string;
+  customerName: string;
+  customerEmail: string;
+  customerMobile: string;
+  reference: string;
+}
+
 const LINKING_ERROR =
   `The package 'rn-payments' doesn't seem to be linked. Make sure: \n\n` +
   Platform.select({ ios: "- You have run 'pod install'\n", default: '' }) +
@@ -98,6 +107,8 @@ export function configureWebpay(config: WebpayConfigType): Promise<any> {
   return RNPayments.configureWebpay(config);
 }
 
-export function initiateWebpayPayment(): Promise<any> {
-  return RNPayments.initiateWebpayPayment();
+export function initiateWebpayPayment(
+  paymentInfo: WebpayPaymentInfo
+): Promise<any> {
+  return RNPayments.initiateWebpayPayment(paymentInfo);
 }

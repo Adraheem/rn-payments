@@ -81,11 +81,11 @@ public class RnPaymentsModule extends ReactContextBaseJavaModule {
   }
 
   @ReactMethod
-  public void initiateWebpayPayment(final Promise promise) {
+  public void initiateWebpayPayment(ReadableMap paymentInfo, final Promise promise) {
     if (webpay == null) {
       throw new RuntimeException("Webpay not initialized");
     }
 
-    webpay.initiatePayment(promise);
+    webpay.initiatePayment(paymentInfo, promise);
   }
 }

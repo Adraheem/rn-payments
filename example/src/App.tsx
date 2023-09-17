@@ -1,4 +1,4 @@
-import env from 'example/environment';
+import env from '../environment';
 import * as React from 'react';
 
 import { StyleSheet, View, Text, Button, Platform, Alert } from 'react-native';
@@ -101,7 +101,14 @@ export default function App() {
   };
 
   const payWithWebpay = () => {
-    initiateWebpayPayment();
+    initiateWebpayPayment({
+      amount: 5000000,
+      customerId: '00000001',
+      customerName: 'Demo customer',
+      customerEmail: 'hello@gmail.com',
+      customerMobile: '08066734672',
+      reference: 'dwmbfw3y87riudsgyf84793fuhi',
+    });
   };
 
   return (

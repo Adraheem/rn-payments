@@ -20,7 +20,7 @@ import java.util.Objects;
 public class InterSwitchWebpay implements IswMobileSdk.IswPaymentCallback {
   @Override
   public void onPaymentCompleted(@NonNull IswPaymentResult iswPaymentResult) {
-    Log.d(NAME, "Successful: "+iswPaymentResult);
+    Log.d(NAME, "Successful: " + iswPaymentResult);
   }
 
   @Override
@@ -43,10 +43,13 @@ public class InterSwitchWebpay implements IswMobileSdk.IswPaymentCallback {
 
     // uncomment to set environment, default is Environment.TEST
     Environment env;
-    switch (environment){
-      case 1: env= Environment.SANDBOX;
-      case 2: env= Environment.PRODUCTION;
-      default: env = Environment.TEST;
+    switch (environment) {
+      case 1:
+        env = Environment.SANDBOX;
+      case 2:
+        env = Environment.PRODUCTION;
+      default:
+        env = Environment.TEST;
     }
     config.setEnv(env);
 
@@ -55,21 +58,27 @@ public class InterSwitchWebpay implements IswMobileSdk.IswPaymentCallback {
     Log.d(NAME, "Webpay initialization completed");
   }
 
-  public void initiatePayment(Promise promise) {
+  public void initiatePayment(ReadableMap paymentInfo, Promise promise) {
     Log.d(NAME, "Webpay: Initiating payment");
     // set customer info
-    String customerId = "1234",
-      customerName = "John Doe",
-      customerEmail = "adraheemzy@gmail.com",
-      customerMobile = "2348185692069",
+    String customerId = paymentInfo.getString("customerId"),
+      customerName = paymentInfo.getString("customerName"),
+      customerEmail = paymentInfo.getString("customerEmail"),
+      customerMobile = paymentInfo.getString("customerMobile"),
       // generate a unique random
       // reference for each transaction
-      reference = "jshwoeurueioewhduhsksdjsdi";
+      reference = paymentInfo.getString("reference");
 
     // amount in kobo e.g. "N500.00" -> 50000
-    int amount = 50000; // e.g. 50000
+    int amount = paymentInfo.getInt("amount"); // e.g. 50000
 
     // create payment info
+    assert customerId != null;
+    assert customerName != null;
+    assert customerEmail != null;
+    assert customerMobile != null;
+    assert reference != null;
+
     IswPaymentInfo iswPaymentInfo = new IswPaymentInfo(
       customerId,
       customerName,
